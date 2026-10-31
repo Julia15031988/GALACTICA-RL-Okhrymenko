@@ -1,3 +1,4 @@
+
 import numpy as np
 
 from galactica.environment.spaceship import SpaceshipState
@@ -33,6 +34,7 @@ def generate_asteroid(
         radius=radius,
     )
 
+
 def generate_asteroid_field(
     rng: np.random.Generator,
     spaceship: SpaceshipState,
@@ -43,8 +45,11 @@ def generate_asteroid_field(
     max_radius: float,
     safety_margin: float = 5.0,
     max_attempts: int = 1000,
+    goal_x: float | None = None,
+    goal_y: float | None = None,
+    goal_radius: float = 0.0,
 ) -> list[AsteroidState]:
-    """Generate asteroids outside the spaceship's safety zone."""
+    """Generate non-overlapping asteroids outside safety zones."""
 
     if count < 0:
         raise ValueError("Asteroid count cannot be negative.")
@@ -54,6 +59,12 @@ def generate_asteroid_field(
 
     if max_attempts <= 0:
         raise ValueError("Max attempts must be positive.")
+
+    if goal_radius < 0:
+        raise ValueError("Goal radius cannot be negative.")
+
+    if (goal_x is None) != (goal_y is None):
+        raise ValueError("Goal coordinates must be provided together.")
 
     asteroids = []
 
@@ -78,18 +89,35 @@ def generate_asteroid_field(
                 + safety_margin
             )
 
-            if distance >= min_distance:
-                overlaps = any(
-                    np.hypot(
-                        asteroid.x - other.x,
-                        asteroid.y - other.y,
-                    ) < asteroid.radius + other.radius
-                    for other in asteroids
+            if distance < min_distance:
+                continue
+
+            if goal_x is not None and goal_y is not None:
+                goal_distance = np.hypot(
+                    goal_x - asteroid.x,
+                    goal_y - asteroid.y,
                 )
 
-                if not overlaps:
-                    asteroids.append(asteroid)
-                    break
+                goal_min_distance = (
+                    goal_radius
+                    + asteroid.radius
+                    + safety_margin
+                )
+
+                if goal_distance < goal_min_distance:
+                    continue
+
+            overlaps = any(
+                np.hypot(
+                    asteroid.x - other.x,
+                    asteroid.y - other.y,
+                ) < asteroid.radius + other.radius
+                for other in asteroids
+            )
+
+            if not overlaps:
+                asteroids.append(asteroid)
+                break
 
         else:
             raise ValueError(

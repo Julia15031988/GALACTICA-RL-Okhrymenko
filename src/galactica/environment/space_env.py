@@ -18,6 +18,8 @@ class SpaceEnv(gym.Env):
     def __init__(self):
         super().__init__()
 
+        self.max_steps = 500
+
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -34,6 +36,8 @@ class SpaceEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
+
+        self.current_step = 0
 
         self.spaceship = SpaceshipState(
             x=10.0,
@@ -58,6 +62,9 @@ class SpaceEnv(gym.Env):
             min_radius=2.0,
             max_radius=5.0,
             safety_margin=5.0,
+            goal_x=self.goal_x,
+            goal_y=self.goal_y,
+            goal_radius=self.goal_radius,
         )
 
         observation = self._get_observation()
@@ -65,6 +72,8 @@ class SpaceEnv(gym.Env):
         return observation, {}
 
     def step(self, action):
+        self.current_step += 1
+
         steering = float(action[0])
 
         # Convert thrust from [-1, 1] to [0, 1]
@@ -99,7 +108,11 @@ class SpaceEnv(gym.Env):
             reward = 0.0
 
         terminated = collision or goal_reached
-        truncated = False
+
+        truncated = (
+            self.current_step >= self.max_steps
+            and not terminated
+        )
 
         info = {
             "collision": collision,

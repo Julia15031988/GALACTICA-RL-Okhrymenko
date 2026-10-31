@@ -39,3 +39,19 @@ def test_goal_reached():
     assert terminated is True
     assert truncated is False
     assert info["goal_reached"] is True
+
+def test_episode_truncated_after_max_steps():
+    env = SpaceEnv()
+    env.reset(seed=42)
+
+    env.asteroids = []
+    env.max_steps = 3
+
+    for _ in range(3):
+        observation, reward, terminated, truncated, info = env.step(
+            [0.0, -1.0]
+        )
+
+    assert terminated is False
+    assert truncated is True
+    assert env.current_step == 3
