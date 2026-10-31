@@ -1,9 +1,15 @@
+
+import math
+
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+
 from galactica.environment.spaceship import SpaceshipState
 from galactica.environment.obstacles import generate_asteroid_field
 from galactica.environment.physics import apply_spaceship_action
+from galactica.environment.collisions import check_collision
+from galactica.environment.sensors import scan_radar
 
 
 class SpaceEnv(gym.Env):
@@ -15,7 +21,7 @@ class SpaceEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(7,),
+            shape=(25,),
             dtype=np.float32,
         )
 
@@ -39,6 +45,10 @@ class SpaceEnv(gym.Env):
             fuel=100.0,
         )
 
+        self.goal_x = 90.0
+        self.goal_y = 50.0
+        self.goal_radius = 5.0
+
         self.asteroids = generate_asteroid_field(
             rng=self.np_random,
             spaceship=self.spaceship,
@@ -50,18 +60,7 @@ class SpaceEnv(gym.Env):
             safety_margin=5.0,
         )
 
-        observation = np.array(
-            [
-                self.spaceship.x,
-                self.spaceship.y,
-                self.spaceship.vx,
-                self.spaceship.vy,
-                self.spaceship.angle,
-                self.spaceship.fuel,
-                self.spaceship.radius,
-            ],
-            dtype=np.float32,
-        )
+        observation = self._get_observation()
 
         return observation, {}
 
@@ -78,7 +77,40 @@ class SpaceEnv(gym.Env):
             dt=1.0,
         )
 
-        observation = np.array(
+        collision = any(
+            check_collision(self.spaceship, asteroid)
+            for asteroid in self.asteroids
+        )
+
+        distance_to_goal = math.hypot(
+            self.goal_x - self.spaceship.x,
+            self.goal_y - self.spaceship.y,
+        )
+
+        goal_reached = distance_to_goal <= self.goal_radius
+
+        observation = self._get_observation()
+
+        if collision:
+            reward = -1.0
+        elif goal_reached:
+            reward = 1.0
+        else:
+            reward = 0.0
+
+        terminated = collision or goal_reached
+        truncated = False
+
+        info = {
+            "collision": collision,
+            "goal_reached": goal_reached,
+            "distance_to_goal": distance_to_goal,
+        }
+
+        return observation, reward, terminated, truncated, info
+
+    def _get_observation(self):
+        spaceship_data = np.array(
             [
                 self.spaceship.x,
                 self.spaceship.y,
@@ -91,12 +123,21 @@ class SpaceEnv(gym.Env):
             dtype=np.float32,
         )
 
-        reward = 0.0
-        terminated = False
-        truncated = False
-        info = {}
+        radar_data = scan_radar(
+            spaceship=self.spaceship,
+            asteroids=self.asteroids,
+            num_rays=16,
+            max_distance=50.0,
+        )
 
-        return observation, reward, terminated, truncated, info
+        goal_data = np.array(
+            [
+                self.goal_x - self.spaceship.x,
+                self.goal_y - self.spaceship.y,
+            ],
+            dtype=np.float32,
+        )
 
-
-
+        return np.concatenate(
+            [spaceship_data, radar_data, goal_data]
+        )

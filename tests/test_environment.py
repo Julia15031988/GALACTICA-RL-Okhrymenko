@@ -6,7 +6,7 @@ def test_reset_generates_asteroids():
 
     observation, info = env.reset(seed=42)
 
-    assert observation.shape == (7,)
+    assert observation.shape == (25,)
     assert len(env.asteroids) == 20
     assert isinstance(info, dict)
 
@@ -21,3 +21,21 @@ def test_reset_reproducibility():
 
     assert (observation1 == observation2).all()
     assert asteroids1 == asteroids2
+
+def test_goal_reached():
+    env = SpaceEnv()
+    env.reset(seed=42)
+
+    env.asteroids = []
+
+    env.spaceship.x = env.goal_x
+    env.spaceship.y = env.goal_y
+
+    observation, reward, terminated, truncated, info = env.step(
+        [0.0, -1.0]
+    )
+
+    assert reward == 1.0
+    assert terminated is True
+    assert truncated is False
+    assert info["goal_reached"] is True
