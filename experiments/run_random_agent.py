@@ -1,3 +1,5 @@
+import csv
+from pathlib import Path
 from galactica.agents.baseline_agent import RandomAgent
 from galactica.environment.space_env import SpaceEnv
 from galactica.evaluation.metrics import (
@@ -52,6 +54,41 @@ def main():
         results.append(result)
 
     metrics = calculate_metrics(results)
+    # Save individual episode results for scientific analysis.
+    output_dir = Path("results")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_file = output_dir / "random_agent_100_episodes.csv"
+
+    with output_file.open(
+        mode="w",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+        writer = csv.writer(file)
+
+        writer.writerow([
+            "seed",
+            "steps",
+            "total_reward",
+            "goal_reached",
+            "collision",
+            "out_of_bounds",
+            "fuel_used",
+        ])
+
+        for result in results:
+            writer.writerow([
+                result.seed,
+                result.steps,
+                result.total_reward,
+                result.goal_reached,
+                result.collision,
+                result.out_of_bounds,
+                result.fuel_used,
+            ])
+
+    print(f"Results saved to: {output_file}")
 
     print("=== RANDOM AGENT: 100 EPISODES ===")
     print(f"Episodes: {metrics['episodes']}")
