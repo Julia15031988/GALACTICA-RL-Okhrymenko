@@ -7,7 +7,7 @@ from gymnasium import spaces
 from galactica.environment.spaceship import SpaceshipState
 from galactica.environment.obstacles import generate_asteroid_field
 from galactica.environment.physics import apply_spaceship_action
-from galactica.environment.collisions import check_collision
+from galactica.environment.collisions import check_path_collision
 from galactica.environment.sensors import scan_radar
 
 
@@ -79,11 +79,15 @@ class SpaceEnv(gym.Env):
     def step(self, action):
         self.current_step += 1
 
+        # Save the spaceship position before movement.
+        previous_spaceship = self.spaceship
+
         steering = float(action[0])
 
         # Convert thrust from [-1, 1] to [0, 1].
         thrust = (float(action[1]) + 1.0) / 2.0
 
+        # Apply steering, thrust, and movement.
         self.spaceship = apply_spaceship_action(
             spaceship=self.spaceship,
             steering=steering,
@@ -91,9 +95,14 @@ class SpaceEnv(gym.Env):
             dt=1.0,
         )
 
-        # Check collision with asteroids.
+        # Check the entire movement path for asteroid collisions.
+        # This prevents tunneling through stationary asteroids.
         collision = any(
-            check_collision(self.spaceship, asteroid)
+            check_path_collision(
+                previous_spaceship,
+                self.spaceship,
+                asteroid,
+            )
             for asteroid in self.asteroids
         )
 
@@ -172,8 +181,12 @@ class SpaceEnv(gym.Env):
             )
 
         if not (
-            self.goal_radius <= self.goal_x <= self.field_width - self.goal_radius
-            and self.goal_radius <= self.goal_y <= self.field_height - self.goal_radius
+            self.goal_radius
+            <= self.goal_x
+            <= self.field_width - self.goal_radius
+            and self.goal_radius
+            <= self.goal_y
+            <= self.field_height - self.goal_radius
         ):
             raise ValueError(
                 "Goal must be fully inside the field."
