@@ -14,8 +14,13 @@ from galactica.environment.sensors import scan_radar
 class SpaceEnv(gym.Env):
     """2D space navigation environment."""
 
-    def __init__(self):
+    def __init__(self, asteroid_count: int = 20):
         super().__init__()
+
+        if asteroid_count < 0:
+            raise ValueError("Asteroid count cannot be negative.")
+
+        self.asteroid_count = asteroid_count
 
         self.field_width = 100.0
         self.field_height = 100.0
@@ -58,29 +63,47 @@ class SpaceEnv(gym.Env):
         self._validate_start_position()
         self._validate_field_boundaries()
 
-        self.asteroids = generate_asteroid_field(
-            rng=self.np_random,
-            spaceship=self.spaceship,
-            count=20,
-            width=self.field_width,
-            height=self.field_height,
-            min_radius=2.0,
-            max_radius=5.0,
-            safety_margin=5.0,
-            goal_x=self.goal_x,
-            goal_y=self.goal_y,
-            goal_radius=self.goal_radius,
-        )
+        # Generate asteroids only when requested.
+        if self.asteroid_count == 0:
+            self.asteroids = []
+        else:
+            self.asteroids = generate_asteroid_field(
+                rng=self.np_random,
+                spaceship=self.spaceship,
+                count=self.asteroid_count,
+                width=self.field_width,
+                height=self.field_height,
+                min_radius=2.0,
+                max_radius=5.0,
+                safety_margin=5.0,
+                goal_x=self.goal_x,
+                goal_y=self.goal_y,
+                goal_radius=self.goal_radius,
+            )
 
         observation = self._get_observation()
 
         return observation, {}
+
+    def _calculate_progress_reward(
+        self,
+        previous_distance: float,
+        current_distance: float,
+    ) -> float:
+        """Calculate reward based on progress toward the goal."""
+        progress = previous_distance - current_distance
+        return float(progress * 0.01)
 
     def step(self, action):
         self.current_step += 1
 
         # Save the spaceship position before movement.
         previous_spaceship = self.spaceship
+
+        previous_distance = math.hypot(
+            self.goal_x - previous_spaceship.x,
+            self.goal_y - previous_spaceship.y,
+        )
 
         steering = float(action[0])
 
@@ -123,7 +146,10 @@ class SpaceEnv(gym.Env):
         elif goal_reached:
             reward = 1.0
         else:
-            reward = 0.0
+            reward = self._calculate_progress_reward(
+                previous_distance=previous_distance,
+                current_distance=distance_to_goal,
+            )
 
         # End the episode on collision, goal, or boundary exit.
         terminated = collision or goal_reached or out_of_bounds
@@ -147,7 +173,6 @@ class SpaceEnv(gym.Env):
 
     def _validate_start_position(self):
         """Ensure the spaceship and goal do not overlap."""
-
         start_distance = math.hypot(
             self.goal_x - self.spaceship.x,
             self.goal_y - self.spaceship.y,
@@ -164,7 +189,6 @@ class SpaceEnv(gym.Env):
 
     def _is_spaceship_inside_field(self):
         """Check whether the spaceship is fully inside the field."""
-
         ship = self.spaceship
 
         return (
@@ -174,7 +198,6 @@ class SpaceEnv(gym.Env):
 
     def _validate_field_boundaries(self):
         """Validate initial spaceship and goal positions."""
-
         if not self._is_spaceship_inside_field():
             raise ValueError(
                 "Spaceship must be fully inside the field."
@@ -194,7 +217,6 @@ class SpaceEnv(gym.Env):
 
     def _get_observation(self):
         """Build the observation vector for the agent."""
-
         spaceship_data = np.array(
             [
                 self.spaceship.x,
